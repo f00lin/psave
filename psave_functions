@@ -1,0 +1,312 @@
+#!/bin/bash
+
+
+
+
+
+##############################################
+# information and assistance functions
+
+help()
+{
+	# prints a brief summary of psave's usage
+	
+    printf '\n%s\n\n' "HELP for psave $PSAVE_VERSION"
+    
+    printf '%-20s%-30s\n\n' "psave (true|false)" "Switch system to (powersave|performance)"
+    
+    printf '%-20s%-30s\n\n' "psave menu" "Display a basic menu-driven interface to control modules individually"
+    
+    printf '%-20s%-30s\n' "psave status" "Brief summary of the current power state of each module"
+    printf '%-20s%-30s\n\n' "psave details" "More detailed summary of current state of each module"
+    
+    printf '%-20s%-30s\n' "psave version" "Report the current version of psave"
+    printf '%-20s%-30s\n\n' "psave help" "Print this help message"
+}
+
+
+version()
+{
+	# prints the currently installed version of psave
+	printf '\n%s\n\n' "This is psave $PSAVE_VERSION"
+	exit
+}
+
+##############################################
+
+
+
+
+
+
+##############################################
+# logging functions
+
+init_logfile()
+{
+	# initiates the simple log file, to which all psave's output is directed
+	
+	if [[ -z "$1" ]]; then
+		printf '%s\n\n' "Please pass a filename to init_logfile"
+		return 1	
+	elif [[ -h "$1" ]]; then
+		printf '%s\n\n' "$1 is a symbolic link, refusing to overwrite"
+		return 1
+	elif [[ -f "$1" && ! -O "$1"  ]]; then
+		printf '%s\n\n' "We do not own $1, refusing to overwrite"
+		return 1
+	fi
+	exec > "$1" 2>&1
+}
+
+##############################################
+
+
+
+
+
+
+##############################################
+# functions for running modules
+
+run_module()
+{
+	# sets a specified *single* module to powersave or performance
+	
+    # $1 = module name
+    # $2 = argument passed to module, e.g. 'true' or 'false'
+    
+    if [[ -x "$1" ]]; then
+      if [[ "$2" = "false" || "$2" = "true" ]]; then
+        printf '%s\n' "[${1##*/}] Running module *$2*"
+        "$@"
+        if [[ "$?" -eq "$E_DISABLED" ]]; then 
+          printf '%s\n' "[${1##*/}] Module disabled"
+        elif [[ "$?" -eq "$E_RUNFAIL" ]]; then 
+          printf '%s\n' "[${1##*/}] The module could not be run"
+        fi
+        printf '\n'
+      else
+        "$@"
+      fi
+    else
+      printf '%s\n\n' "[${1##*/}] Module not executable"
+    fi      
+}
+
+
+run_modules()
+{
+	# sets *all* modules to powersave or performance
+	
+    # $1 = argument passed to modules, i.e. 'true' or 'false'
+    
+    local mod
+    
+    for mod in ${AVAILABLE_MODULES[@]}; do
+        run_module "$MODULE_DIR/$mod" "$1"
+    done
+}
+
+##############################################
+
+
+
+
+
+
+##############################################
+# functions related to psave menu
+
+set_menu()
+{
+	# displays a simple menu allowing each aspect controlled by
+    # psave to be individually switched between powersaving and 
+    # performance settings
+
+PS3="
+Pick a number (or q to quit): "
+
+    printf '\n%s\n\n' "Select a module to control"
+    # list modules as numbered list, pick number to control or 'q' to exit
+    select mod in ${AVAILABLE_MODULES[@]}
+    do
+    
+      # only accept numeric input in the correct range
+      if [[ $REPLY =~ (^[1-9]+$|^[1-9]+0$) && $REPLY -le ${#AVAILABLE_MODULES[@]} ]]; then
+        # return module's current status
+        printf '\n\n\n\n'
+        export_functions query module_status_check
+        report=($(run_module $MODULE_DIR/$mod status))
+        printf '\n'
+        printf '%s %s %s' ${report[0]} "is currently set to:" ${report[1]}
+        # provide option to switch module's status, or 'q' to quit
+        printf '\n\n%s\n\n' "Switch $mod to performance (false) or powersave (true)"
+        select pow in false true
+        do
+          if [[ $pow = "false" || $pow = "true" ]]; then
+            printf "\n\n"
+            run_module $MODULE_DIR/$mod $pow
+            exit
+          elif [[ $REPLY = "q" ]]; then
+            exit
+          else   
+            continue
+          fi
+        done
+      elif [[ $REPLY = "q" ]]; then
+        exit
+      else
+        continue
+      fi
+    done
+}
+
+##############################################
+
+
+    
+
+
+##############################################
+# function export functions
+
+export_functions()
+{
+	# export any necessary functions into the environment
+	
+	for func in $@; do
+	  export -f $func
+	done
+}
+
+##############################################
+
+
+
+
+
+##############################################
+# functions for the quering and reporting of the current state of
+# psave modules
+
+
+module_status_check()
+{
+	# returns the current state of a module
+	
+	# possible results are:
+	# 'powersave'; 'performace'; 'undetermined'; 'both'
+	
+	# $1 = current state
+	# $2 = performance setting
+	# $3 = powersave setting
+	
+	
+	if [[ "$1" = "$2" && "$1" = "$3" ]]; then
+	  printf '%s\n' '+-both+-'
+	elif [[ "$1" = "$2" ]]; then
+	  printf '%s\n' "++performance++"
+	elif [[ "$1" = "$3" ]]; then
+	  printf '%s\n' '--powersave--'
+	elif [[ -n "$1" ]]; then
+	  printf '%s\n' "##undetermined##"
+	else
+	  printf '%s\n' "N/A"
+	fi	
+}
+
+
+query()
+{
+	# queries each module for current status/details depending on the specified inquiry
+	
+	#$1=status/details
+	
+	#$2=current
+	#$3=performance
+	#$4=powersave
+	
+	
+	if [[ "$1" = "status" ]]; then
+	
+	  # prints a list of all modules with current status: powersave/performance/undetermined/both
+	
+	  printf '%-20s%-30s\n' "[$MODULE] " "$(module_status_check "$2" "$3" "$4")"
+	  
+	
+	elif [[ "$1" = "details" ]]; then
+	
+	  # prints a list of all modules with current settings and those specified for powersave/performance
+	  # in psave.conf, together with a report of the module's current status
+	  
+	  printf '\n %-20s%-20s%-20s%-20s%-40s' "[$MODULE]" "$2" "$3" "$4" "$(module_status_check "$2" "$3" "$4")" 
+	  
+	fi
+}    
+
+
+print_details_column_headings()
+{
+	# formats the column headings for a 'psave details' query
+	
+	printf '\n %-20s%-20s%-20s%-20s%-40s \n' "Module" "Current" "Powersave" "Performance" "Profile"
+}   
+
+
+print_status_column_headings()
+{
+	# formats the column headings for a 'psave status' query
+
+	printf '%-20s%-30s\n\n' "Module" "Profile"
+}
+
+
+query_end_format()
+{
+	# formats the end of a call to the query function
+	
+	printf '\n'	
+}
+
+##############################################
+
+
+
+
+
+##############################################
+# functions for discovering current power-state: AC/battery
+
+
+current_pow_status()
+{
+	# queries current power state
+	
+	# return 1 for AC
+	# return 0 for battery
+	
+	
+	# assume on AC if no power supplies found as it's
+	# probably a desktop
+	ret=1
+	
+	# check sysfs power supplies
+	for ps in /sys/class/power_supply/*; do
+	  if [[ -r "$ps/online" ]]; then
+	    # now it's known there is an AC supply assume that its a
+	    # laptop and on battery until proven otherwise
+	    ret=0
+	    read -r ps_status < "$ps/online"
+	    if [[ "$ps_status" -eq 1 ]]; then
+	      return 1
+	    fi
+	  else
+	    continue
+	  fi
+	done
+	
+	return $ret	
+}
+
+##############################################

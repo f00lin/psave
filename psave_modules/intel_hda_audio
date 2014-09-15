@@ -1,0 +1,61 @@
+#!/bin/bash
+
+
+
+# Check this module has been enabled
+[[ "$INTEL_HDA_AUDIO" = True ]] || exit $E_DISABLED
+
+
+# Module name
+MODULE="${0##*/}"
+
+
+# Query current state if required
+if [[ ! "$1" =~ ("false"|"true") && -f $INTEL_HDA_CONTROLLER_PATH && -f $INTEL_HDA_TIMEOUT_PATH ]]; then
+  CURRENT=$(echo $(< $INTEL_HDA_CONTROLLER_PATH) $(echo $(< $INTEL_HDA_TIMEOUT_PATH)))
+fi
+
+
+
+intel_hda_set()
+{
+	if [[ -w $INTEL_HDA_CONTROLLER_PATH ]]; then
+	  echo $1 > $INTEL_HDA_CONTROLLER_PATH
+	  printf '%s\n' "[$MODULE: HDA] Power saving activation: $1"
+	else
+	  printf '%s\n' "[$MODULE: HDA] Path not found or not writeable: $INTEL_HDA_CONTROLLER_PATH"
+	fi
+	
+	if [[ -w $INTEL_HDA_TIMEOUT_PATH ]]; then
+	  echo $2 > $INTEL_HDA_TIMEOUT_PATH
+	  printf '%s\n' "[$MODULE: HDA] Power saving timeout: $2"
+	else
+	  printf '%s\n' "[$MODULE: HDA] Path not found or not writeable: $INTEL_HDA_TIMEOUT_PATH"
+	fi
+	
+	if [[ -c /dev/dsp ]]; then
+	  echo 1 2>/dev/null > /dev/dsp
+	else
+	  printf '%s\n' "[$MODULE] /dev/dsp not found so settings may not have taken effect. Try loading the snd_pcm_oss kernel module"
+	fi
+}
+	  
+
+
+case "$1" in
+
+  false) intel_hda_set $INTEL_HDA_CONTROLLER_PERF \
+                       $INTEL_HDA_TIMEOUT_PERF
+                       ;;
+
+   true) intel_hda_set $INTEL_HDA_CONTROLLER_POWSAV \
+                       $INTEL_HDA_TIMEOUT_POWSAV
+                       ;;
+                      
+ status|details) query "$1" \
+                       "$CURRENT" \
+                       "$INTEL_HDA_CONTROLLER_PERF $INTEL_HDA_TIMEOUT_PERF" \
+                       "$INTEL_HDA_CONTROLLER_POWSAV $INTEL_HDA_TIMEOUT_POWSAV"
+                       ;;                
+esac	
+

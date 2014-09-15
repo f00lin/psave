@@ -1,0 +1,46 @@
+#!/bin/bash
+
+
+
+# Check this module has been enabled
+[[ "$PCIE_ASPM" = True ]] || exit $E_DISABLED
+
+
+# Module name
+MODULE="${0##*/}"
+
+
+# Query current state if required
+if [[ ! "$1" =~ ("false"|"true") && -f "$PCIE_ASPM_PATH" ]]; then
+  CURRENT=$(while read line; do for fsb in powersave performance default; do
+            if [[ $line =~ "[$fsb]" ]]; then echo $fsb; fi; done; done < $PCIE_ASPM_PATH)
+fi
+
+
+
+pcie_aspm_set()
+{
+	if [[ -w "$PCIE_ASPM_PATH" ]]; then
+	  echo "$1" > "$PCIE_ASPM_PATH"
+	  printf '%s\n' "[$MODULE] Set to $1"
+	else
+	  printf '%s\n' "[$MODULE] Path not found or not writeable: $PCIE_ASPM_PATH"
+	fi
+}
+
+
+
+case "$1" in
+
+  false) pcie_aspm_set "$PCIE_ASPM_PERF" 
+         ;;
+
+   true) pcie_aspm_set "$PCIE_ASPM_POWSAV"
+         ;;
+         
+ status|details) query "$1" \
+                       "$CURRENT" \
+                       "$PCIE_ASPM_PERF" \
+                       "$PCIE_ASPM_POWSAV"
+                       ;;                
+esac	

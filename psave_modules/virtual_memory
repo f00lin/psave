@@ -1,0 +1,54 @@
+#!/bin/bash
+
+
+
+# Check this module has been enabled
+[[ "$ENABLE_CORE" = True || "$VIRTUAL_MEMORY" = True ]] || exit $E_DISABLED
+
+
+# Module name
+MODULE="${0##*/}"
+
+
+# Query current state if required
+if [[ ! "$1" =~ ("false"|"true") && -d "$VM_PATH" ]]; then
+  CURRENT=($(for i in $VM_FILES; do echo $(< $VM_PATH/$i); done))
+fi
+
+
+
+vm_set()
+{
+	for f in $VM_FILES; do
+	  if [[ -w "$VM_PATH/$f" ]]; then 
+	    echo $1 > "$VM_PATH/$f"
+	    printf '%s\n' "[$MODULE] $f set to $1"
+	  else
+	    printf '%s\n' "[$MODULE] No write permission for: $VM_PATH/$f"
+	  fi
+	  shift 1
+	done
+}
+
+
+
+case "$1" in
+
+  false) vm_set $VM_LAPTOP_MODE_PERF \
+                $VM_DIRTY_RATIO_PERF \
+                $VM_DIRTY_BACKGROUND_RATIO_PERF \
+                $VM_DIRTY_WRITEBACK_CENTISECS_PERF
+                ;;
+  
+   true) vm_set $VM_LAPTOP_MODE_POWSAV \
+                $VM_DIRTY_RATIO_POWSAV \
+                $VM_DIRTY_BACKGROUND_RATIO_POWSAV \
+                $VM_DIRTY_WRITEBACK_CENTISECS_POWSAV
+                ;;
+                         
+ status|details) query "$1" \
+                       "${CURRENT[*]}" \
+                       "$VM_LAPTOP_MODE_PERF $VM_DIRTY_RATIO_PERF $VM_DIRTY_BACKGROUND_RATIO_PERF $VM_DIRTY_WRITEBACK_CENTISECS_PERF" \
+                       "$VM_LAPTOP_MODE_POWSAV $VM_DIRTY_RATIO_POWSAV $VM_DIRTY_BACKGROUND_RATIO_POWSAV $VM_DIRTY_WRITEBACK_CENTISECS_POWSAV"
+                       ;;                 
+esac

@@ -1,0 +1,145 @@
+#!/bin/bash
+
+
+
+# Check this module has been enabled
+[[ "$KERNEL_MODULES" = True ]] || exit $E_DISABLED
+
+
+# Module details
+MODULE="${0##*/}"
+
+
+kernel_module_checker()
+{
+	# checks whether all or some of the kernel modules are
+	# loaded or unloaded
+	
+	local count
+	count=0
+	
+	local mods
+	mods=($KERNEL_MODULES_LIST)
+	
+	for mod in ${mods[@]}; do
+      if lsmod | grep -w "$mod" >/dev/null 2>&1; then
+        ((count++))
+        continue
+      else
+        # kernel modules ARE NOT all loaded
+        return 1
+      fi
+    done
+    
+    if [[ $count != ${#mods[@]} ]]; then
+      # only some kernel modules are loaded
+      return 270 
+    else
+      # kernel modules ARE all loaded
+      return 0
+    fi
+}
+
+
+# Query current state if required
+if [[ ! "$1" =~ ("false"|"true") ]]; then
+  KERNEL_MODULES_PERF=loaded
+  KERNEL_MODULES_POWSAV=unloaded
+  
+  kernel_module_checker
+  if [[ $? = 0 ]]; then
+    CURRENT=loaded
+  elif [[ $? = 1 ]]; then
+    CURRENT=unloaded
+  elif [[ $? = 270 ]]; then
+    CURRENT=undetermined
+  fi
+fi    
+
+
+
+module_unload_depends()
+{
+	# $1 = module to unload
+	
+	# Relevant fields from /proc/modules
+	local MOD SIZE USE_COUNT DEPENDS REST
+	
+	# Ensure module [$1] to be removed is formatted with underscores rather than hyphens
+	local UNDL="$(echo $1 | tr - _)"
+	
+	
+	while read MOD SIZE USE_COUNT DEPENDS REST; do
+	  [[ "$MOD" = "$UNDL" ]] || continue
+	  if [[ "$DEPENDS" = "-" ]]; then
+	    # It appears no modules depend on this one
+	    if modprobe -r "$MOD"; then
+	      printf '%s\n' "[$MODULE] Module $MOD successfully unloaded"
+	    else
+	      printf '%s\n' "[$MODULE] Failed to unload module $MOD: use count = $USE_COUNT"
+	    fi
+	  else
+	    # It appears there are dependent modules, so list dependent
+	    # modules along with original target
+	    MOD_DEPENDS=",$1,${DEPENDS%,}"
+	    while [[ -n "${MOD_DEPENDS}" ]]; do
+	      # Try to unload the last module first...
+	      MOD="${MOD_DEPENDS##*,}"
+	      module_unload_depends $MOD
+	      # ...chop the last module off the list...and repeat till all unloaded
+	      MOD_DEPENDS="${MOD_DEPENDS%,*}"
+	    done
+	  fi
+	done < /proc/modules
+	  
+	
+}
+
+
+
+module_unload()
+{
+	if [[ -n $KERNEL_MODULES_LIST ]]; then
+	  for mod in $KERNEL_MODULES_LIST; do
+	    module_unload_depends $mod
+	  done
+	else
+	  printf '%s\n' "[$MODULE] No kernel modules specified to unload"
+	fi
+}
+
+
+
+module_load()
+{
+	if [[ -n $KERNEL_MODULES_LIST ]]; then
+	  for mod in $KERNEL_MODULES_LIST; do
+	    modprobe $mod >/dev/null 2>&1
+	    if [[ $? -eq 0 ]]; then
+	      printf '%s\n' "[$MODULE] Module $mod successfully reloaded"
+	    else
+	      printf '%s\n' "[$MODULE] Failed to unload module $mod"
+	    fi
+	  done
+	else
+	  printf '%s\n' "[$MODULE] No kernel modules specified to load"
+	fi
+}
+
+
+
+case "$1" in
+
+  false) module_load
+         ;;
+  
+   true) module_unload
+         ;;
+         
+  status|details) query "$1" \
+                        "$CURRENT" \
+                        "$KERNEL_MODULES_PERF" \
+                        "$KERNEL_MODULES_POWSAV"
+                        ;;          
+esac
+

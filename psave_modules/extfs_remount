@@ -1,0 +1,86 @@
+#!/bin/bash
+
+
+
+# Check this module has been enabled
+[[ "$ENABLE_CORE" = True || "$EXTFS_REMOUNT" = True ]] || exit $E_DISABLED
+
+
+# Module name
+MODULE="${0##*/}"
+
+
+# Query current state if required
+if [[ ! "$1" =~ ("false"|"true") ]]; then
+  OLDIFS=$IFS
+  IFS=,
+  extfs_perf=($EXTFS_REMOUNT_PERF)
+  extfs_powsav=($EXTFS_REMOUNT_POWSAV)
+  IFS=$OLDIFS
+  
+  EXTFS_PERF="perf options"
+  EXTFS_POWSAV="powsav options"
+  
+  # assume it's set for powersaving mode
+  CURRENT="powsav options"
+  
+  # check this assumption
+  match_line=$(grep -E '(ext3|ext4)' /proc/mounts)
+    for i in ${extfs_powsav[@]}; do
+      if [[ $match_line =~ $i ]]; then
+        continue
+      else
+        # now we know it's not set for powersave, assume performance
+        CURRENT="perf options"
+        
+        # check assumption
+        for i in ${extfs_powsav[@]}; do
+          if [[ $match_line =~ $i ]]; then
+            continue
+          else
+            # now we know it matches neither powersave or performance
+            CURRENT="undetermined"
+          fi
+        done
+      fi
+    done
+fi
+        
+  
+
+
+ 
+extfs_remount_set()
+{
+	# $1 = remount parameters
+	
+	while read DEV MOUNT FSTYPE REST; do
+	  if [[ $FSTYPE = "ext3" || $FSTYPE = "ext4" ]]; then
+	    printf "[$MODULE] Remounting %s with the following options %s..." "$MOUNT" "$1"
+	    mount -o remount,"$1" "$MOUNT" >/dev/null 2>&1
+	    if [[ $? -eq 0 ]]; then
+	      echo Done
+	    else
+	      echo Failed
+	    fi
+	  fi
+	done < /proc/mounts
+}
+
+
+
+case "$1" in
+
+   false) extfs_remount_set "$EXTFS_REMOUNT_PERF"
+          ;;
+   
+    true) extfs_remount_set "$EXTFS_REMOUNT_POWSAV"
+          ;;
+          
+  status|details) query "$1" \
+                        "$CURRENT" \
+                        "$EXTFS_PERF" \
+                        "$EXTFS_POWSAV"
+                        ;;
+esac
+

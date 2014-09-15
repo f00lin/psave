@@ -1,0 +1,56 @@
+#!/bin/bash
+
+
+
+# Check this module has been enabled
+[[ "$ENABLE_CORE" = True || "$READAHEAD" = True ]] || exit $E_DISABLED
+
+
+# Module name
+MODULE="${0##*/}"
+
+
+# Check the relevant executable exists
+[ -x /sbin/blockdev ] || exit $E_RUNFAIL
+
+
+# Query current state if required
+if [[ ! "$1" =~ ("false"|"true") ]]; then
+  DEVICES=($(for dev in $(awk '/^\/dev\// {print $1}'</etc/mtab); do echo $dev; done))
+  CURRENT=$(blockdev --getra ${DEVICES[0]})
+fi
+
+
+
+readahead_set() 
+{
+    # the intent here is to iterate through all filesystems
+    # mounted on a local block device.
+    
+    for dev in $(awk '/^\/dev\// {print $1}'</etc/mtab); do
+	  printf "[$MODULE] Setting readahead for %s to %d..." "$dev" "$1"
+	  /sbin/blockdev --setra $1 "$dev" >/dev/null 2>&1
+	  if [[ $? -eq 0 ]]; then
+	    echo Done
+	  else
+	    echo Failed
+	  fi
+    done
+}
+
+
+
+case "$1" in
+
+   false) readahead_set $READAHEAD_PERF
+          ;;
+   
+    true) readahead_set $READAHEAD_POWSAV
+          ;;
+          
+   status|details) query "$1" \
+                         "$CURRENT" \
+                         "$READAHEAD_PERF" \
+                         "$READAHEAD_POWSAV"
+                         ;;                                                    
+esac

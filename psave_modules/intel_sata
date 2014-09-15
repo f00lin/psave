@@ -1,0 +1,54 @@
+#!/bin/bash
+
+
+
+# Check this module has been enabled
+[[ "$INTEL_SATA" = True ]] || exit $E_DISABLED
+
+
+# Module name
+MODULE="${0##*/}"
+
+
+# Query current state if required
+if [[ ! "$1" =~ ("false"|"true") ]]; then
+  PATHS=($INTEL_SATA_PATH)
+  if [[ -f ${PATHS[0]} ]]; then 
+    CURRENT=$(< ${PATHS[0]})
+  fi
+fi
+
+
+
+intel_sata_set()
+{	
+	local count
+	count=0
+	
+	for i in $INTEL_SATA_PATH; do
+	  if [[ -w "$i" ]]; then
+	    printf "[$MODULE] Setting SATA APLM on %s to %s..." "Host$count" "$1"
+	    echo "$1" > "$i" && echo "Done" || echo "Failed"
+	    (( count += 1 ))
+	  else
+	    printf '%s\n' "[$MODULE] No write permission for some or all of the relevant files"
+	    break
+	  fi
+    done
+}
+
+
+case "$1" in
+
+  false) intel_sata_set $INTEL_SATA_PERF
+         ;;
+  
+   true) intel_sata_set $INTEL_SATA_POWSAV
+         ;;
+         
+ status|details) query "$1" \
+                       "$CURRENT" \
+                       "$INTEL_SATA_PERF" \
+                       "$INTEL_SATA_POWSAV" 
+                       ;;
+esac

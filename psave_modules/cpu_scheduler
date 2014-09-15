@@ -1,0 +1,48 @@
+#!/bin/bash
+
+
+
+# Check this module has been enabled
+[[ "$CPU_SCHEDULER" = True ]] || exit $E_DISABLED
+
+
+# Module name
+MODULE="${0##*/}"
+
+
+# Query current state if required
+if [[ ! "$1" =~ ("false"|"true") ]]; then
+  PATHS=($CPU_SCHEDULER_PATH)
+  [[ -f ${PATHS[0]} ]] && CURRENT=$(< ${PATHS[0]})
+fi
+
+
+
+sched_set() 
+{
+    for i in $CPU_SCHEDULER_PATH; do
+      if [[ -w "$i" ]]; then
+	    echo "$1" > "$i"
+	    printf '%s\n' "[$MODULE] (MC|SMP|SMT) schedulers set to $1"
+	  else
+	    printf '%s\n' "[$MODULE] Either no write permission or no scheduler present on system"
+	    continue
+	  fi
+    done
+}
+
+
+case "$1" in
+
+  false) sched_set $CPU_SCHEDULER_PERF 
+         ;;
+
+   true) sched_set $CPU_SCHEDULER_POWSAV
+         ;;
+         
+ status|details) query "$1" \
+                       "$CURRENT" \
+                       "$CPU_SCHEDULER_PERF" \
+                       "$CPU_SCHEDULER_POWSAV"
+                       ;;
+esac

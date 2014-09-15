@@ -1,0 +1,52 @@
+#!/bin/bash
+
+
+
+# Check this module has been enabled
+[[ "$SHE" = True ]] || exit $E_DISABLED
+
+
+# Module details
+MODULE="${0##*/}"
+
+
+# Query current state if required
+if [[ ! "$1" =~ ("false"|"true") && -f $SHE_PATH ]]; then
+  she_oct=$(< $SHE_PATH)
+  CURRENT=$(if [[ $she_oct = 0x302 ]]; then echo 2; \
+            elif [[ $she_oct = 0x300 ]]; then echo 0; \
+            elif [[ $she_oct = 0x301 ]]; then echo 1; \
+            fi)
+fi
+
+
+
+eeepc_she_set()
+{
+	if [[ -w "$SHE_PATH" ]]; then
+	  echo $1 > $SHE_PATH
+	  printf '%s\n' "[$MODULE] Set to $1"
+	else
+	  printf '%s\n' "[$MODULE] Path not found or not writeable: $SHE_PATH"
+	fi
+	
+}
+
+
+
+case "$1" in
+  
+  false) eeepc_she_set $SHE_PERF
+         ;;
+  
+   true) eeepc_she_set $SHE_POWSAV
+         ;;
+         
+ status|details) query "$1" \
+                       "$CURRENT" \
+                       "$SHE_PERF" \
+                       "$SHE_POWSAV"                     
+                       ;;                                      
+esac	
+
+	

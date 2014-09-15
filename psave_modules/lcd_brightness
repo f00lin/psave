@@ -1,0 +1,47 @@
+#!/bin/bash
+
+
+
+# Check this module has been enabled
+[[ "$LCD_BRIGHTNESS" = True ]] || exit $E_DISABLED
+
+
+# Module name
+MODULE="${0##*/}"
+
+
+# Query current state if required
+if [[ ! "$1" =~ ("false"|"true") && -f $LCD_BRIGHTNESS_PATH ]]; then
+  CURRENT=$(< $LCD_BRIGHTNESS_PATH)
+fi
+
+
+
+lcd_brightness_set()
+{
+	if [[ -w "$LCD_BRIGHTNESS_PATH" ]]; then
+	  echo $1 > $LCD_BRIGHTNESS_PATH
+	  printf '%s\n' "[$MODULE] Set to $1"
+	else
+	  printf '%s\n' "[$MODULE] Path not found or not writeable: $LCD_BRIGHTNESS_PATH"
+	fi
+}
+
+	
+	
+case "$1" in
+
+  false) lcd_brightness_set $LCD_BRIGHTNESS_PERF
+         ;;
+  
+   true) lcd_brightness_set $LCD_BRIGHTNESS_POWSAV
+         ;;
+       
+ status|details) query "$1" \
+                       "$CURRENT" \
+                       "$LCD_BRIGHTNESS_PERF" \
+                       "$LCD_BRIGHTNESS_POWSAV"
+                       ;;           
+esac
+  
+  

@@ -1,0 +1,29 @@
+#!/bin/bash
+
+. "${PM_FUNCTIONS}"
+. /usr/bin/psave_functions
+
+command_exists pm-powersave || exit $NA
+
+
+
+case $1 in
+
+    suspend|hibernate) psave false ;;
+    
+    resume|thaw)
+    
+        current_pow_status
+		
+		case $? in
+		
+		 1) /usr/bin/psave false;;
+		 0) /usr/bin/psave true;;
+		 
+		esac
+    ;;
+    
+    *) exit $NA ;;
+esac
+exit 0
+    

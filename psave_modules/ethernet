@@ -1,0 +1,69 @@
+#!/bin/bash
+
+
+
+# Check this module has been enabled
+[[ "$ETHERNET" = True ]] || exit $E_DISABLED
+
+
+# Module details
+MODULE="${0##*/}"
+
+
+# Query current state if required
+if [[ ! "$1" =~ ("false"|"true") && -d "$ETHERNET_PATH" ]]; then
+  CURRENT=($(for dev in $ETHERNET_DEVICES; do if [[ -f $(readlink -f $ETHERNET_PATH/$dev/device/enable) ]]; then \
+            echo $(< $ETHERNET_PATH/$dev/device/enable); fi; done))
+fi
+
+
+
+ethernet_set()
+{
+	local state
+	
+	[[ "$1" = 0 ]] && state=disabled
+	[[ "$1" = 1 ]] && state=enabled
+	
+	for dev in $ETHERNET_DEVICES; do
+	  path=$(readlink -f $ETHERNET_PATH/$dev)
+	  if [[ -n $path ]]; then
+	    if [[ -d $path/device ]]; then
+	      dev_path=$(readlink -f $path/device)
+	    fi
+	  fi
+	    
+	  if [[ -n $dev_path && -f $dev_path/enable ]]; then
+	    if [[ -w $dev_path/enable ]]; then
+	      # $dev_path/enable increments, so only apply this if current state differs from new one
+	      if [[ $(< $dev_path/enable) != $1 ]]; then
+	        echo $1 > $dev_path/enable
+	        printf '%s\n' "[$MODULE] $dev set to $1 ($state)"
+	      else
+	        printf '%s\n' "[$MODULE] $dev set to $1 ($state)"
+	      fi
+	    else
+	      printf '%s\n' "[$MODULE] No write permission to alter ethernet state"
+	    fi
+	  else
+	    printf '%s\n' "[$MODULE] $dev does not support enable/disable"
+	  fi
+	done	
+}
+
+
+
+case "$1" in
+
+  false) ethernet_set $ETHERNET_PERF
+         ;;
+  
+   true) ethernet_set $ETHERNET_POWSAV
+         ;;
+  
+  status|details) query "$1" \
+                        "${CURRENT[0]}" \
+                        "$ETHERNET_PERF" \
+                        "$ETHERNET_POWSAV"
+                        ;;
+esac

@@ -1,0 +1,66 @@
+[cpu_governor] Running module *true*
+[cpu_governor] CPU0 using ondemand governor
+[cpu_governor] CPU1 using ondemand governor
+[cpu_governor] Ondemand governor threshold set to 98
+
+[cpu_scheduler] Running module *true*
+[cpu_scheduler] (MC|SMP|SMT) schedulers set to 1
+
+[dev_pwr_man] Running module *true*
+[dev_pwr_man] (PCI|I2C|SPI) devices set to auto
+
+[eeepc_she] Running module *true*
+[eeepc_she] Set to 2
+
+[ethernet] Running module *true*
+[ethernet] eth0 set to 0 (disabled)
+
+[extfs_remount] Running module *true*
+[extfs_remount] Remounting / with the following options commit=600...Done
+[extfs_remount] Remounting /home with the following options commit=600...Done
+
+[harddrives] Running module *true*
+[harddrives] Enabling power management for /dev/sda...Done
+
+[intel_hda] Running module *true*
+[intel_hda] Power saving activation: Y
+[intel_hda] Power saving timeout: 1
+
+[intel_sata] Running module *true*
+[intel_sata] Setting SATA APLM on host0 to min_power...Done
+[intel_sata] Setting SATA APLM on host1 to min_power...Done
+[intel_sata] Setting SATA APLM on host2 to min_power...Done
+[intel_sata] Setting SATA APLM on host3 to min_power...Done
+
+[kernel_modules] Running module *true*
+[kernel_modules] Module uvcvideo successfully unloaded
+
+[lcd_brightness] Running module *true*
+[lcd_brightness] Set to 6
+
+[nmi_watchdog] Running module *true*
+[nmi_watchdog] Set to 0
+
+[pcie_aspm] Running module *true*
+[pcie_aspm] Set to powersave
+
+[readahead] Running module *true*
+[readahead] Setting readahead for /dev/sda3 to 3072...Done
+[readahead] Setting readahead for /dev/sda1 to 3072...Done
+[readahead] Setting readahead for /dev/sda4 to 3072...Done
+
+[usb_autosuspend] Running module *true*
+[usb_autosuspend] USBCORE autosuspend timeout set to: 1
+[usb_autosuspend] Timeout for USB devices set to: 1
+[usb_autosuspend] Power mode for USB devices set to: auto
+
+[virtual_memory] Running module *true*
+[virtual_memory] laptop_mode set to 5
+[virtual_memory] dirty_ratio set to 60
+[virtual_memory] dirty_background_ratio set to 40
+[virtual_memory] dirty_writeback_centisecs set to 60000
+
+[wireless] Running module *true*
+[wireless] Setting wireless adaptor wlan0 for powersave...
+[wireless] ...Done
+

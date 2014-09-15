@@ -1,0 +1,249 @@
+#!/bin/bash
+
+
+
+#######################
+# Check for superuser privileges 
+
+if [[ $EUID != 0 ]]; then
+  printf '%s\n' "psave must be run as root" 1>&2
+  exit 1
+fi
+
+
+#######################
+# source needed files
+
+. ./psave_functions
+. ./psave.conf
+
+
+#######################
+# current version
+
+PSAVE_VERSION=1.5
+
+
+#######################
+# set paths
+
+CONFIG_FILE=./psave.conf
+LOGFILE=./psave.log
+MODULE_DIR=./psave_modules
+
+
+#######################
+# compile module list
+
+AVAILABLE_MODULES=($(for i in $MODULE_DIR/*; do if [[ ! "$i" =~ ^$MODULE_DIR/- &&  -x "$i" ]]; then echo ${i##*/}; fi; done))
+
+
+#######################
+# export variables so modules can see them
+
+set -a
+
+# exit codes
+E_RUNFAIL=251
+E_DISABLED=252
+
+
+# core module group
+ENABLE_CORE=${ENABLE_CORE:-False}
+
+# dev_pwr_man Y
+DEVICE_POWER_MANAGEMENT=${DEVICE_POWER_MANAGEMENT:=False}
+DEVICE_POWER_MANAGEMENT_PERF=${DEVICE_POWER_MANAGEMENT_PERF:=on}
+DEVICE_POWER_MANAGEMENT_POWSAV=${DEVICE_POWER_MANAGEMENT_POWSAV:=auto}
+DEVICE_POWER_MANAGEMENT_PCI_PATH=${DEVICE_POWER_MANAGEMENT_PCI_PATH:=/sys/bus/pci/devices/*/power/control}
+DEVICE_POWER_MANAGEMENT_I2C_PATH=${DEVICE_POWER_MANAGEMENT_I2C_PATH:=/sys/bus/i2c/devices/*/power/control}
+PS_DEVICE_POWER_MANAGEMENT_SPI_PATH=${DEVICE_POWER_MANAGEMENT_SPI_PATH:=/sys/bus/spi/devices/*/power/control}
+
+# extfs_options
+EXTFS_REMOUNT=${EXTFS_REMOUNT:=False}
+EXTFS_REMOUNT_PERF=${EXTFS_REMOUNT_PERF:="commit=0"}
+EXTFS_REMOUNT_POWSAV=${EXTFS_REMOUNT_POWSAV:="commit=600"}
+
+# nmi_watchdog Y
+NMI_WATCHDOG=${NMI_WATCHDOG:=False}
+NMI_WATCHDOG_PERF=${NMI_WATCHDOG_PERF:=1}
+NMI_WATCHDOG_POWSAV=${NMI_WATCHDOG_POWSAV:=0}
+NMI_WATCHDOG_PATH=${NMI_WATCHDOG_PATH:=/proc/sys/kernel/nmi_watchdog}
+
+# readahead Y
+READAHEAD=${READAHEAD:=False}
+READAHEAD_PERF=${READAHEAD_PERF:=256}
+READAHEAD_POWSAV=${READAHEAD_POWSAV:=3072}
+
+# usb_autosuspend Y
+USB_AUTOSUSPEND=${USB_AUTOSUSPEND:=False}
+
+USB_AUTOSUSPEND_POWER_MODE_PERF=${USB_AUTOSUSPEND_POWER_MODE_PERF:=auto}
+USB_AUTOSUSPEND_TIMEOUT_PERF=${USB_AUTOSUSPEND_TIMEOUT_PERF:=2}
+
+USB_AUTOSUSPEND_POWER_MODE_POWSAV=${USB_AUTOSUSPEND_POWER_MODE_POWSAV:=auto}
+USB_AUTOSUSPEND_TIMEOUT_POWSAV=${USB_AUTOSUSPEND_TIMEOUT_POWSAV:=1}
+
+USB_AUTOSUSPEND_CORE_PATH=${USB_AUTOSUSPEND_CORE_PATH:=/sys/module/usbcore/parameters/autosuspend}
+USB_AUTOSUSPEND_ACTIVATION_PATH=${USB_AUTOSUSPEND_POWER_MODE_PATH:=/sys/bus/usb/devices/*/power/control}
+USB_AUTOSUSPEND_TIMEOUT_PATH=${USB_AUTOSUSPEND_TIMEOUT_PATH:=/sys/bus/usb/devices/*/power/autosuspend}
+
+# virtual_memory Y
+VIRTUAL_MEMORY=${VIRTUAL_MEMORY:=False}
+VM_LAPTOP_MODE_PERF=${VM_LAPTOP_MODE_PERF:=0}
+VM_DIRTY_RATIO_PERF=${VM_DIRTY_RATIO_PERF:=20}
+VM_DIRTY_BACKGROUND_RATIO_PERF=${VM_DIRTY_BACKGROUND_RATIO_PERF:=5}
+VM_DIRTY_WRITEBACK_CENTISECS_PERF=${VM_DIRTY_WRITEBACK_CENTISECS_PERF:=500}
+VM_LAPTOP_MODE_POWSAV=${VM_LAPTOP_MODE_POWSAV:=5}
+VM_DIRTY_RATIO_POWSAV=${VM_DIRTY_RATIO_POWSAV:=60}
+VM_DIRTY_BACKGROUND_RATIO_POWSAV=${VM_DIRTY_BACKGROUND_RATIO_POWSAV:=40}
+VM_DIRTY_WRITEBACK_CENTISECS_POWSAV=${VM_DIRTY_WRITEBACK_CENTISECS_POWSAV:=60000}
+VM_PATH=${VM_SETTINGS_PATH:=/proc/sys/vm}
+VM_FILES=${VM_FILES:="laptop_mode dirty_ratio dirty_background_ratio dirty_writeback_centisecs"}
+
+
+#######################
+
+# cpu_governor Y
+CPU_GOVERNOR=${CPU_GOVERNOR:=False}
+CPU_GOVERNOR_PERF=${CPU_GOVERNOR_PERF:=performance}
+CPU_GOVERNOR_POWSAV=${CPU_GOVERNOR_POWSAV:=ondemand}
+CPU_GOVERNOR_ONDEMAND_THRESHOLD=${CPU_GOVERNOR_ONDEMAND_THRESHOLD:=98}
+CPU_GOVERNOR_PATH=${CPU_GOVERNOR_PATH:=/sys/devices/system/cpu/cpu?/cpufreq/scaling_governor}
+CPU_GOVERNOR_ONDEMAND_THRESHOLD_PATH=${CPU_GOVERNOR_ONDEMAND_THRESHOLD_PATH:=/sys/devices/system/cpu/cpufreq/ondemand/up_threshold}
+CPU_GOVERNOR_AVAILABLE_PATH=${CPU_GOVERNOR_AVAILABLE_PATH:=/sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors}
+
+# cpu_scheduler Y
+CPU_SCHEDULER=${CPU_SCHEDULER:=False}
+CPU_SCHEDULER_PERF=${CPU_SCHEDULER_PERF:=0}
+CPU_SCHEDULER_POWSAV=${CPU_SCHEDULER_POWSAV:=1}
+CPU_SCHEDULER_PATH=${CPU_SCHEDULER_PATH:=/sys/devices/system/cpu/sched_*_power_savings}
+
+# eeepc_she Y
+SHE=${SHE:-False}
+SHE_PERF=${SHE_PERF:=0}
+SHE_POWSAV=${SHE_POWSAV:=2}
+SHE_PATH=${SHE_PATH:=/sys/devices/platform/eeepc/cpufv}
+
+# ethernet
+ETHERNET=${ETHERNET:=False}
+ETHERNET_DEVICES=${ETHERNET_DEVICES:="eth0"}
+ETHERNET_PERF=${ETHERNET_PERF:=1}
+ETHERNET_POWSAV=${ETHERNET_POWSAV:=0}
+ETHERNET_PATH=${ETHERNET_PATH:=/sys/class/net}
+
+# intel_ac97_audio
+INTEL_AC97_AUDIO=${INTEL_AC97_AUDIO:=False}
+INTEL_AC97_TIMEOUT_PERF=${INTEL_AC97_TIMEOUT_PERF:=0}
+INTEL_AC97_TIMEOUT_POWSAV=${INTEL_AC97_TIMEOUT_POWSAV:=1}
+INTEL_AC97_TIMEOUT_PATH=${INTEL_AC97_TIMEOUT_PATH:=/sys/module/snd_ac97_codec/parameters/power_save}
+
+# intel_hda_audio Y
+INTEL_HDA_AUDIO=${INTEL_HDA_AUDIO:=False}
+INTEL_HDA_CONTROLLER_PERF=${INTEL_HDA_CONTROLLER_PERF:=N}
+INTEL_HDA_TIMEOUT_PERF=${INTEL_HDA_TIMEOUT_PERF:=0}
+INTEL_HDA_CONTROLLER_POWSAV=${INTEL_HDA_CONTROLLER_POWSAV:=Y}
+INTEL_HDA_TIMEOUT_POWSAV=${INTEL_HDA_TIMEOUT_POWSAV:=1}
+INTEL_HDA_CONTROLLER_PATH=${INTEL_HDA_CONTROLLER_PATH:=/sys/module/snd_hda_intel/parameters/power_save_controller}
+INTEL_HDA_TIMEOUT_PATH=${INTEL_HDA_TIMEOUT_PATH:=/sys/module/snd_hda_intel/parameters/power_save}
+
+# intel_sata Y
+INTEL_SATA=${INTEL_SATA:=False}
+INTEL_SATA_PERF=${INTEL_SATA_PERF:=max_performance}
+INTEL_SATA_POWSAV=${INTEL_SATA_POWSAV:=min_power}
+INTEL_SATA_PATH=${INTEL_SATA_PATH:=/sys/class/scsi_host/*/link_power_management_policy}
+
+# harddrives Y
+HARDDRIVES=${HARDDRIVES:=False}
+
+HARDDRIVES_WRITE_CACHE_PERF=${HARDDRIVES_WRITE_CACHE_PERF:=1}
+HARDDRIVES_SPINDOWN_PERF=${HARDDRIVES_SPINDOWN_PERF:=0}
+HARDDRIVES_POWER_MGMT_PERF=${HARDDRIVES_POWER_MGMT_PERF:=254}
+HARDDRIVES_ACCOUSTIC_MGMT_PERF=${HARDDRIVES_ACCOUSTIC_MGMT_PERF:=0}
+
+HARDDRIVES_WRITE_CACHE_POWSAV=${HARDDRIVES_WRITE_CACHE_POWSAV:=0}
+HARDDRIVES_SPINDOWN_POWSAV=${HARDDRIVES_SPINDOWN_POWSAV:=6}
+HARDDRIVES_POWER_MGMT_POWSAV=${HARDDRIVES_POWER_MGMT_POWSAV:=128}
+HARDDRIVES_ACCOUSTIC_MGMT_POWSAV=${HARDDRIVES_ACCOUSTIC_MGMT_POWSAV:=254}
+
+HARDDRIVES_MAIN=${HARDDRIVES_MAIN:="/dev/sda"}
+HARDDRIVES_DRIVE_LIST=${HARDDRIVES_DRIVE_LIST:="/dev/[hs]d[a-z]"}
+
+# kernel modules
+KERNEL_MODULES=${KERNEL_MODULES:=False}
+KERNEL_MODULES_LIST=${KERNEL_MODULES_LIST:=}
+
+# lcd_brightness Y
+LCD_BRIGHTNESS=${LCD_BRIGHTNESS:=False}
+LCD_BRIGHTNESS_PERF=${LCD_BRIGHTNESS_PERF:=10}
+LCD_BRIGHTNESS_POWSAV=${LCD_BRIGHTNESS_POWSAV:=6}
+LCD_BRIGHTNESS_PATH=${LCD_BRIGHTNESS_PATH:=/sys/class/backlight/acpi_video0/brightness}
+
+# pcie_aspm Y
+PCIE_ASPM=${PCIE_ASPM:=False}
+PCIE_ASPM_PERf=${PCIE_ASPM_PERF:=default}
+PCIE_ASPM_POWSAV=${PCIE_ASPM_POWSAV:=powersave}
+PCIE_ASPM_PATH=${PCIE_ASPM_PATH:=/sys/module/pcie_aspm/parameters/policy}
+
+# wireless
+WIRELESS=${WIRELESS:=False}
+WIRELESS_INTERFACES=${WIRELESS_INTERFACES:=wlan0}
+
+#######################
+
+
+  
+
+case "$1" in
+   
+   # set all modules for powersave/performance
+     
+   true|false) init_logfile "$LOGFILE"
+               run_modules "$1"
+               ;;     
+               
+   # show menu to control modules individually
+      
+         menu) set_menu
+               ;;
+            
+   # report the details of each module's settings         
+            
+      details) export_functions query module_status_check
+               print_details_column_headings
+               run_modules "$1"
+               query_end_format
+               ;;
+               
+   # report the status of each module (performance|powersave|undetermined|both)            
+               
+       status) export_functions query module_status_check
+               print_status_column_headings
+               run_modules "$1"
+               ;;
+               
+   # print a brief help message
+   
+         help) help
+               ;;
+  
+   # report the current version of psave and exit   
+               
+      version) version
+               ;;             
+      
+   # ...otherwise print help and exit
+         
+      *) help && exit 1
+         ;;
+esac
+    
+  
+  
+  
+
+
+
+
+
+

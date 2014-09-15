@@ -1,0 +1,88 @@
+#!/bin/bash
+
+
+
+# Check this module has been enabled
+[[ "$ENABLE_CORE" = True || "$USB_AUTOSUSPEND" = True ]] || exit $E_DISABLED
+
+
+# Module name
+MODULE="${0##*/}"
+
+
+# Query current state if required
+if [[ ! "$1" =~ ("false"|"true") ]]; then
+  
+  PATH_1=($USB_AUTOSUSPEND_TIMEOUT_PATH)
+  PATH_2=($USB_AUTOSUSPEND_POWER_MODE_PATH)
+
+  if [[ -f ${PATH_1[0]} && -f ${PATH_2[0]} ]]; then
+    PATHS_ALL=(${PATH_1[0]} ${PATH_2[0]})
+    CURRENT=($(for i in ${PATHS_ALL[@]}; do echo $(< "$i"); done))
+  fi
+
+fi
+
+
+
+usb_autosuspend_set()
+{
+	local success_power_mode
+	local success_timeout
+	
+	
+	if [[ -w $USB_AUTOSUSPEND_CORE_PATH ]]; then
+	  echo "$1" > $USB_AUTOSUSPEND_CORE_PATH
+	  printf '%s\n' "[$MODULE] USBCORE autosuspend timeout set to: $1"
+	else
+	  printf '%s\n' "[$MODULE] USBCORE unable to set autosuspend timeout"
+	fi
+	
+	if [[ -d /sys/bus/usb/devices ]]; then
+	  for j in $USB_AUTOSUSPEND_TIMEOUT_PATH; do
+        if [[ -w "$j" ]]; then
+          echo "$1" > $j
+          success_timeout=1
+        else
+          break
+        fi
+      done
+    
+      [[ "$success_timeout" = 1 ]] && printf '%s\n' "[$MODULE] Timeout for USB devices set to: $1"
+      [[ "$success_timeout" != 1 ]] && printf '%s\n' printf '%s\n' "[$MODULE] No write permission for some or all: $USB_AUTOSUSPEND_TIMEOUT_PATH"
+	
+	
+	  for i in $USB_AUTOSUSPEND_POWER_MODE_PATH; do
+	    if [[ -w "$i" ]]; then
+          echo "$2" > $i
+          success_power_mode=1
+        else          
+          break
+        fi
+      done
+    else
+      printf '%s\n' "[$MODULE] No USB devices found"
+    fi
+    
+    [[ "$success_power_mode" = 1 ]] && printf '%s\n' "[$MODULE] Power mode for USB devices set to: $2"
+    [[ "$success_power_mode" != 1 ]] && printf '%s\n' "[$MODULE] No write permission for some or all: $USB_AUTOSUSPEND_POWER_MODE_PATH"
+}
+
+
+
+case "$1" in
+
+  false) usb_autosuspend_set $USB_AUTOSUSPEND_TIMEOUT_PERF \
+                             $USB_AUTOSUSPEND_POWER_MODE_PERF                          
+                             ;;
+
+   true) usb_autosuspend_set $USB_AUTOSUSPEND_TIMEOUT_POWSAV \
+                             $USB_AUTOSUSPEND_POWER_MODE_POWSAV
+                             ;;
+                             
+ status|details) query "$1" \
+                       "${CURRENT[*]}" \
+                       "$USB_AUTOSUSPEND_TIMEOUT_PERF $USB_AUTOSUSPEND_POWER_MODE_PERF" \
+                       "$USB_AUTOSUSPEND_TIMEOUT_POWSAV $USB_AUTOSUSPEND_POWER_MODE_POWSAV"
+                       ;;                    
+esac

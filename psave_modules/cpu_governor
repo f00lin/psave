@@ -1,0 +1,99 @@
+#!/bin/bash
+
+
+
+# Check this module has been enabled
+[[ "$CPU_GOVERNOR" = True ]] || exit $E_DISABLED
+
+
+# Module name
+MODULE="${0##*/}"
+
+
+# Query current state if required
+if [[ ! "$1" =~ ("false"|"true") ]]; then
+  PATHS=($CPU_GOVERNOR_PATH)
+  [[ -f ${PATHS[0]} ]] && CURRENT=$(< ${PATHS[0]})
+fi
+
+
+##### 
+# Kernel module check
+#
+# Check acpi-cpufreq is loaded...
+while read mod rest; do
+  if [[ "$mod" = "acpi_cpufreq" ]]; then
+    module=1
+    break 2
+  fi
+done < /proc/modules
+
+# ...and exit with appropriate message if not found
+[[ $module != 1 ]] && 
+{ printf '%s\n' "[$MODULE] Module acpi_cpufreq is not loaded";  exit $E_RUNFAIL; }
+ 
+
+#####
+# Governor check  
+#
+# Check requested governors are available...
+gov_perf=true
+gove_pows=true
+
+while read govs; do
+  if [[ $govs =~ ^$CPU_GOVERNOR_PERF$ ]]; then
+    gov_perf=false
+  fi
+  if [[ $govs =~ ^$CPU_GOVERNOR_POWSAV$ ]]; then
+    gov_pows=false
+  fi
+done < "$CPU_GOVERNOR_AVAILABLE_PATH"
+
+#...and exit with appropriate message if either governor not available
+[[ $gov_perf = false ]] && 
+{ printf '%s\n' "[$MODULE] Module not loaded for CPU governor: $CPU_GOVERNOR_PERF"; \
+  exit $E_RUNFAIL; }
+
+[[ $gov_pows = false ]] && 
+{ printf '%s\n' "[$MODULE] Module not loaded for CPU governor: $CPU_GOVERNOR_POWSAV"; \
+  exit $E_RUNFAIL; }                          
+   
+   
+
+cpu_governor_set()
+{
+	local count=0
+	
+	for i in $CPU_GOVERNOR_PATH; do
+	  if [[ -w $i ]]; then
+	    echo "$1" > $i
+	    printf '%s\n' "[$MODULE] CPU$count using $1 governor"
+	    (( count+=1 )) 
+	  else
+	    printf '%s\n' "[$MODULE] No write permission for CPU$count governor path"
+	    (( count+=1 ))
+	  fi
+	done
+	
+	if [[ $1 = "ondemand" && -w $CPU_GOVERNOR_ONDEMAND_THRESHOLD_PATH ]]; then
+	  echo $CPU_GOVERNOR_ONDEMAND_THRESHOLD > $CPU_GOVERNOR_ONDEMAND_THRESHOLD_PATH
+	  printf '%s\n' "[$MODULE] Ondemand governor threshold set to $CPU_GOVERNOR_ONDEMAND_THRESHOLD"
+	fi
+}
+
+
+
+case "$1" in
+
+  false) cpu_governor_set $CPU_GOVERNOR_PERF 
+         ;;
+
+   true) cpu_governor_set $CPU_GOVERNOR_POWSAV 
+         ;;
+         
+ status|details) query "$1" \
+                       "$CURRENT" \
+                       "$CPU_GOVERNOR_PERF" \
+                       "$CPU_GOVERNOR_POWSAV" 
+                       ;;                            
+esac

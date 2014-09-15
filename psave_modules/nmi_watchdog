@@ -1,0 +1,46 @@
+#!/bin/bash
+
+
+
+# Check this module has been enabled
+[[ "$ENABLE_CORE" = True || "$NMI_WATCHDOG" = True ]] || exit $E_DISABLED
+
+
+# Module name
+MODULE="${0##*/}"
+
+
+# Query current state if required
+if [[ ! "$1" =~ ("false"|"true") && -f $NMI_WATCHDOG_PATH ]]; then
+  CURRENT=$(< $NMI_WATCHDOG_PATH)
+fi
+
+
+
+nmi_watchdog_set()
+{
+	if [[ -w "$NMI_WATCHDOG_PATH" ]]; then
+	  echo $1 > "$NMI_WATCHDOG_PATH"
+	  printf '%s\n' "[$MODULE] Set to $1"
+	else
+	  printf '%s\n' "[$MODULE] Path not found or not writeable: $NMI_WATCHDOG_PATH"
+	fi
+	
+}
+
+
+
+case "$1" in
+
+   false) nmi_watchdog_set $NMI_WATCHDOG_PERF
+          ;;
+   
+    true) nmi_watchdog_set $NMI_WATCHDOG_POWSAV
+          ;;
+   
+   status|details) query "$1" \
+                         "$CURRENT" \
+                         "$NMI_WATCHDOG_PERF" \
+                         "$NMI_WATCHDOG_POWSAV"
+                         ;;
+esac

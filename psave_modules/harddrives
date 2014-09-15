@@ -1,0 +1,72 @@
+#!/bin/bash
+
+
+
+# Check this module has been enabled
+[[ "$HARDDRIVES" = True ]] || exit $E_DISABLED
+
+
+# Module name
+MODULE="${0##*/}"
+
+
+# Query current state if required
+if [[ ! "$1" =~ ("false"|"true") ]]; then
+  
+  # not possible to query current spindown time with hdparm so just using these three
+  HARDDRIVES_PERF="$HARDDRIVES_WRITE_CACHE_PERF $HARDDRIVES_POWER_MGMT_PERF $HARDDRIVES_ACCOUSTIC_MGMT_PERF"
+  HARDDRIVES_POWSAV="$HARDDRIVES_WRITE_CACHE_POWSAV $HARDDRIVES_POWER_MGMT_POWSAV $HARDDRIVES_ACCOUSTIC_MGMT_POWSAV"
+  
+  # take reading from the device containing / filesystem, as setting applied same to all ext3/ext4 filesystems
+  curr_cache=($(hdparm -W $HARDDRIVES_MAIN))
+  curr_power_mgmt=($(hdparm -B $HARDDRIVES_MAIN))
+  curr_accoustic=($(hdparm -M $HARDDRIVES_MAIN))
+  
+  CURRENT="${curr_cache[3]} ${curr_power_mgmt[3]} ${curr_accoustic[3]}"
+
+fi
+
+
+
+harddrives_set_performance()
+{	
+	for dev in $HARDDRIVES_DRIVE_LIST; do
+	  printf "[$MODULE] Disabling power management for %s..." "$dev"
+	  hdparm -W $HARDDRIVES_WRITE_CACHE_PERF \
+	         -S $HARDDRIVES_SPINDOWN_PERF \
+	         -B $HARDDRIVES_POWER_MGMT_PERF \
+	         -M $HARDDRIVES_ACCOUSTIC_MGMT_PERF $dev >/dev/null 2>&1 \
+	         && echo Done || echo Failed
+	done
+}
+
+
+
+harddrives_set_powersave()
+{	
+	for dev in $HARDDRIVES_DRIVE_LIST; do
+	  printf "[$MODULE] Enabling power management for %s..." "$dev"
+	  hdparm -W $HARDDRIVES_WRITE_CACHE_POWSAV \
+	         -S $HARDDRIVES_SPINDOWN_POWSAV \
+	         -B $HARDDRIVES_POWER_MGMT_POWSAV \
+	         -M $HARDDRIVES_ACCOUSTIC_MGMT_POWSAV $dev >/dev/null 2>&1 \
+	         && echo Done || echo Failed
+	done
+}
+
+
+
+case "$1" in
+
+   false) harddrives_set_performance
+          ;;
+   
+    true) harddrives_set_powersave
+          ;;
+          
+  status|details) query "$1" \
+                        "$CURRENT" \
+                        "$HARDDRIVES_PERF" \
+                        "$HARDDRIVES_POWSAV"
+                        ;;      
+esac

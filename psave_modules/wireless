@@ -1,0 +1,132 @@
+#!/bin/bash
+
+
+
+# Check this module has been enabled
+[[ "$WIRELESS" = True ]] || exit $E_DISABLED
+
+
+# Module name
+MODULE="${0##*/}"
+
+
+# Query current state if required
+if [[ ! "$1" =~ ("false"|"true") ]]; then
+  WIRELESS_PERF=off
+  WIRELESS_POWSAV=on
+  
+  INTERFACES=($WIRELESS_INTERFACES)
+  
+  iwconfig ${INTERFACES[0]} | grep -w Power\ Management:off >/dev/null 2>&1 && CURRENT=off 
+  iwconfig ${INTERFACES[0]} | grep -w Power\ Management:on >/dev/null 2>&1 && CURRENT=on
+fi
+
+
+
+set_power_level()
+{
+	# $1 = interface name
+	# $2 = performance\powersave argument (true|false)
+	
+	# Check that this is a wireless adaptor
+    [[ -d "/sys/class/net/$1/wireless" ]] ||
+    { printf '%s\n' "[$MODULE] $1 does not appear to be a wireless adaptor"; return $E_RUNFAIL; }
+      
+    # Check that the device is not disabled
+    [[ "$(< /sys/class/net/$1/device/enable)" = "1" ]] ||
+    { printf '%s\n' "[$MODULE] $1 is disabled"; return $E_RUNFAIL; }
+	  
+	# Check that a driver is available
+    [[ -L "/sys/class/net/$1/device/driver" ]] || 
+    { printf '%s\n' "[$MODULE] No driver found for wireless adaptor $1"; return $E_RUNFAIL; }
+      
+      
+    # Get the driver name
+    driver=$(readlink /sys/class/net/$1/device/driver)
+    driver=${driver##*/}
+      
+      
+    # Apply driver-dependent settings
+      case $driver in
+      
+        ipw2100|ipw2200)
+        
+          # Older Intel adaptors need a combination of iwconfig and iwpriv
+          
+          if [[ $2 = "false" ]]; then
+            iwconfig $i power on || return $E_RUNFAIL
+            iwpriv $i set_power 6 || return $E_RUNFAIL
+          elif [[ $2 = "true" ]]; then
+            iwconfig $i power on || return $E_RUNFAIL
+            iwpriv $i set_power 5 || return $E_RUNFAIL
+          fi
+          ;;
+          
+          
+        iwl*)
+          
+          # Newer Intel adaptors (e.g. iwl3945, iwl4965) rely on the kernel
+          # also covers ipw3945, which is no longer included in recent kernels
+          
+          if [[ -f "/sys/class/net/$i/device/power_level" ]]; then
+            if [[ $2 = "false" ]]; then
+              echo 0 > "/sys/class/net/$1/device/power_level" || return $E_RUNFAIL             
+            elif [[ $2 = "true" ]]; then
+              echo 3 > "/sys/class/net/$i/device/power_level" || return $E_RUNFAIL              
+            fi
+          else
+            if [[ $2 = "false" ]]; then
+              iwconfig $i power off || return $E_RUNFAIL
+            elif [[ $2 = "true" ]]; then
+              iwconfig $i power on || return $E_RUNFAIL
+            fi
+          fi
+          ;;
+          
+          
+        *)
+        
+          # All other wireless adaptors controlled via 'iwconfig power'
+          
+          if [[ $2 = "false" ]]; then
+            iwconfig "$i" power off || return $E_RUNFAIL            
+          elif [[ $2 = "true" ]]; then
+            iwconfig "$i" power on || return $E_RUNFAIL            
+          fi
+          ;;
+              
+      esac
+      
+    return 0      	
+}
+
+
+wireless_powsav()
+{
+	# $1 = performance\powersave argument (true|false)
+	
+	[[ "$1" = "false" ]] && state="performance"
+	[[ "$1" = "true" ]] && state="powersave"
+	
+	for i in $WIRELESS_INTERFACES; do
+	  printf '%s\n' "[$MODULE] Setting wireless adaptor $i for $state..."
+	  set_power_level "$i" "$1" && echo "[$MODULE] ...Done" || echo "[$MODULE] ...Failed"
+	done
+}
+
+
+
+case "$1" in
+
+  false) wireless_powsav $1
+         ;;
+
+   true) wireless_powsav $1
+         ;;
+         
+  status|details) query "$1" \
+                        "$CURRENT" \
+                        "$WIRELESS_PERF" \
+                        "$WIRELESS_POWSAV"
+                        ;;                               
+esac

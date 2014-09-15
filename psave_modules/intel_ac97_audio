@@ -1,0 +1,54 @@
+#!/bin/bash
+
+
+
+# Check this module has been enabled
+[[ "$INTEL_AC97_AUDIO" = True ]] || exit $E_DISABLED
+
+
+# Module name
+MODULE="${0##*/}"
+
+
+# Query current state if required
+if [[ ! "$1" =~ ("false"|"true") && -f $INTEL_AC97_TIMEOUT_PATH ]]; then
+  CURRENT=$(< $INTEL_AC97_TIMEOUT_PATH)
+fi
+
+
+
+intel_ac97_set()
+{
+		
+	if [[ -w $INTEL_AC97_TIMEOUT_PATH ]]; then
+	   echo $1 > $INTEL_AC97_TIMEOUT_PATH
+	   printf '%s\n' "[$MODULE] Power saving activation: $1"
+	else
+	   printf '%s\n' "[$MODULE] Path not found or not writeable: $INTEL_AC97_TIMEOUT_PATH"
+	fi
+	
+	if [[ -c /dev/dsp ]]; then
+	  echo 1 2>/dev/null > /dev/dsp
+	else
+	  printf '%s\n' "[$MODULE] /dev/dsp not found so settings may not have taken effect. Try loading the snd_pcm_oss kernel module"
+	fi
+	
+}
+	  
+
+
+case "$1" in
+
+  false) intel_ac97_set $INTEL_AC97_TIMEOUT_PERF
+                       ;;
+
+   true) intel_ac97_set $INTEL_AC97_TIMEOUT_POWSAV
+                       ;;
+                      
+ status|details) query "$1" \
+                       "$CURRENT" \
+                       "$INTEL_AC97_TIMEOUT_PERF" \
+                       "$INTEL_AC97_TIMEOUT_POWSAV"
+                       ;;                
+esac	
+

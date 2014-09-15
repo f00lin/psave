@@ -1,0 +1,54 @@
+#!/bin/bash
+
+
+
+# Check this module has been enabled
+[[ "$ENABLE_CORE" = True || "$DEVICE_POWER_MANAGEMENT" = True ]] || exit $E_DISABLED
+
+
+# Module name
+MODULE="${0##*/}"
+
+
+# Query current state if required
+if [[ ! "$1" =~ ("false"|"true") ]]; then
+  PATHS=($DEVICE_POWER_MANAGEMENT_PCI_PATH)
+  [[ -f ${PATHS[0]} ]] && CURRENT=$(< ${PATHS[0]})
+fi
+
+
+
+device_pm_set()
+{
+	local success
+	
+	for i in $DEVICE_POWER_MANAGEMENT_PCI_PATH $DEVICE_POWER_MANAGEMENT_I2C_PATH $DEVICE_POWER_MANAGEMENT_SPI_PATH; do
+	  if [[ -w $i ]]; then
+	    echo "$1" > $i
+	    success=1
+	  else
+	    break
+	  fi
+	done
+	
+	[[ "$success" = 1 ]] && printf '%s\n' "[$MODULE] (PCI|I2C|SPI) devices set to $1"
+	[[ "$success" != 1 ]] && printf '%s\n' "[$MODULE] No write permission for some or all of the relevant files"	
+	
+}
+
+
+
+case "$1" in
+
+  false) device_pm_set $DEVICE_POWER_MANAGEMENT_PERF \
+                       ;;
+
+   true) device_pm_set $DEVICE_POWER_MANAGEMENT_POWSAV \
+                       ;;
+                       
+ status|details) query "$1" \
+                       "$CURRENT" \
+                       "$DEVICE_POWER_MANAGEMENT_PERF" \
+                       "$DEVICE_POWER_MANAGEMENT_POWSAV"
+                       ;;                                    
+esac	
